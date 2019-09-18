@@ -34,19 +34,14 @@ async function run (dashboardUrl, screenshotFilename) {
 
     // load the proper dashboard
     await page.goto(dashboardUrl);
-    // await page.mouse.click(1800, 800);
-    await page.mouse.move(1500, 300);
-    await page.mouse.down();
-    await page.mouse.move(1800, 600);
-    await page.screenshot({path: screenshotFilename});
 
     // take periodic screenshots from the dashboard
-    // while (true) {
-    //     await delay(waitTimeMs);
-    //     await page.screenshot({path: screenshotFilename});
-    // }
+    while (true) {
+        await delay(waitTimeMs);
+        await page.screenshot({path: screenshotFilename});
+    }
 
-    browser.close();
+    // browser.close();
 }
 
 run(url1, screenshotFilename1);

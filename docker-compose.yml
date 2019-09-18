@@ -16,9 +16,9 @@ services:
         image: nginx:1.15.8
         container_name: iotticket-nginx
         ports:
-            - 8088:8088
+            - 1026:8088
         volumes:
-            - iotticket_data:/data:ro
+            - iotticket_data:/data
             - ./nginx:/etc/nginx:ro
             - ./html:/data/html:ro
 
