@@ -1,0 +1,22 @@
+{
+    "name": "iot-ticket_screenshot",
+    "version": "0.0.1",
+    "description": "Saves a screenshot periodically from an IoT-Ticket dashboard",
+    "author": "Ville Heikkilä",
+    "email": "ville.heikkila@tuni.fi",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git@repository.here"
+    },
+    "main": "iotticket.js",
+    "config": {
+        "port": "8080"
+    },
+    "dependencies": {
+        "puppeteer": "^1.19.0"
+    },
+    "scripts": {
+        "start": "node iotticket.js"
+    }
+}

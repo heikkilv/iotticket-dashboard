@@ -1,0 +1,28 @@
+version: '3.5'
+
+services:
+
+    iotticket:
+        build: ./screenshot
+        image: iotticket:0.1
+        container_name: iotticket-screenshot
+        expose:
+            - 8080
+        env_file: secrets.env
+        volumes:
+            - iotticket_data:/data
+
+    nginx:
+        image: nginx:1.15.8
+        container_name: iotticket-nginx
+        ports:
+            - 8088:8088
+        volumes:
+            - iotticket_data:/data:ro
+            - ./nginx:/etc/nginx:ro
+            - ./html:/data/html:ro
+
+volumes:
+    iotticket_data:
+        external: true
+        name: iotticket_data

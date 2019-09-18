@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="/fullscreen.css">
+        <title>ProCem Dashboard 2</title>
+    </head>
+    <body>
+        <img class="fullscreen" id="dashboardImage" src="/dashboard_2.png">
+
+        <script>
+            setInterval(function() {
+                var myImageElement = document.getElementById("dashboardImage");
+                myImageElement.src = "/dashboard_2.png?rand=" + Math.random();
+            }, 5000);
+        </script>
+    </body>
+</html>
