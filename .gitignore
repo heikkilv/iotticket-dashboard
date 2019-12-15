@@ -1,2 +1,8 @@
-*.png
 secrets.env
+settings.env
+dashboard_urls.txt
+dashboard_names.txt
+
+index.html
+dashboard_?.png
+dashboard_?.html

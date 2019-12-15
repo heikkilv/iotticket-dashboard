@@ -1,28 +1,67 @@
+# Copyright (c) Tampere University 2019.
+# This software has been developed in ProCemPlus-project funded by Business Finland.
+# This code is licensed under the MIT license.
+# See the LICENSE.txt in the project root for the license terms.
+#
+# Main author(s): Ville Heikkila
+
 version: '3.5'
 
 services:
 
     iotticket:
-        build: ./screenshot
-        image: iotticket:0.1
+        image: iotticket:1.0
         container_name: iotticket-screenshot
         expose:
             - 8080
-        env_file: secrets.env
+        env_file:
+            - settings.env
+            - secrets.env
+        environment:
+            - dashboard_list=/run/secrets/dashboard_urls
+        secrets:
+            - dashboard_urls
         volumes:
             - iotticket_data:/data
+            - iotticket_screenshots:/data/screenshots
+
+    dashboard_creator:
+        image: dashboard_creator:1.0
+        container_name: iotticket-dashboard-creator
+        env_file:
+            - settings.env
+        environment:
+            - dashboard_name_file=/run/secrets/dashboard_names
+        secrets:
+            - dashboard_names
+        volumes:
+            - dashboard_html:/data/html
 
     nginx:
         image: nginx:1.15.8
         container_name: iotticket-nginx
+        depends_on:
+            - dashboard_creator
         ports:
-            - 1026:8088
+            - 80:8088
         volumes:
-            - iotticket_data:/data
             - ./nginx:/etc/nginx:ro
-            - ./html:/data/html:ro
+            - iotticket_screenshots:/data/screenshots
+            - dashboard_html:/data/html
 
 volumes:
     iotticket_data:
         external: true
         name: iotticket_data
+    iotticket_screenshots:
+        external: true
+        name: iotticket_screenshots
+    dashboard_html:
+        external: true
+        name: dashboard_html
+
+secrets:
+    dashboard_names:
+        file: ./dashboard_names.txt
+    dashboard_urls:
+        file: ./dashboard_urls.txt
