@@ -9,6 +9,7 @@ const fs = require("fs");
 const puppeteer = require("puppeteer");
 
 const mSecsPerDay = 86400000;
+const errorMessageLimit = 10;
 
 const iotticketUsername = process.env.IOTTICKET_USERNAME;
 const iotticketPassword = process.env.IOTTICKET_PASSWORD;
@@ -19,6 +20,7 @@ const screenshotInterval = parseInt(process.env.screenshot_interval);
 const loginWait = parseInt(process.env.login_wait);
 const initialWait = parseInt(process.env.initial_wait);
 const mouseWait = 500;
+const useErrorCheck = (process.env.use_error_check === "true") ? true : false;
 var restartTimes = process.env.restart_times.split(",");
 restartTimes.sort();
 
@@ -30,8 +32,10 @@ const mouseY2 = mouseY1;
 
 const dashboardUrls = fs.readFileSync(dashboardListFile, "utf8").split("\n");
 var dashboardIndexes = {};
+var receivedErrorMessages = {};
 dashboardUrls.forEach((dashboardUrl, index) => {
     dashboardIndexes[dashboardUrl] = index + 1;
+    receivedErrorMessages[dashboardUrl] = 0;
 });
 
 function getScreenshotFilename(number) {
@@ -135,6 +139,24 @@ async function setupBrowserPage(browser, dashboardUrl, dummy = false) {
     await page.mouse.move(mouseX1, mouseY1, {steps: 10});
 }
 
+function addConsoleListener(page) {
+    // modified from https://stackoverflow.com/questions/58089425/
+    // on how to print out the console messages with a hack that works in puppeteer 1.20.0
+    page.on('console', (msg) => {
+        const cleanMessage = msg.args()
+                                .map(arg => arg.toString()
+                                               .substr(9))
+                                .join(" ");
+
+        if (useErrorCheck && cleanMessage.includes("error")) {
+            const pageUrl = page.url();
+            if (pageUrl in receivedErrorMessages) {
+                receivedErrorMessages[pageUrl] += 1;
+            }
+        }
+    });
+}
+
 async function checkBrowserSetup(browser) {
     // close unnecessary pages
     var pages = await browser.pages();
@@ -162,7 +184,8 @@ async function checkBrowserSetup(browser) {
         await delay(loginWait);
     }
 
-    // check that all needed pages are available
+    // Check that all needed pages are available
+    // and that there has not been too many error messages in the page, if error checking is on.
     pages = await browser.pages();
     const pageUrls = pages.map(page => page.url());
     if (pageUrls.length !== dashboardUrls.length) {
@@ -173,6 +196,15 @@ async function checkBrowserSetup(browser) {
     for (const dashboardUrl of dashboardUrls) {
         if (!pageUrls.includes(dashboardUrl)) {
             console.log(new Date(), "Missing: " + dashboardUrl);
+            return false;
+        }
+
+        if (useErrorCheck && receivedErrorMessages[dashboardUrl] >= errorMessageLimit) {
+            console.log(
+                new Date(),
+                "Too many error messages: (" + receivedErrorMessages[dashboardUrl].toString() + ")",
+                dashboardUrl
+            );
             return false;
         }
     }
@@ -202,6 +234,10 @@ async function takeScreenshot(page) {
 async function takeScreenshotsUntilRestart(browser, nextRestartTime) {
     console.log(new Date(), "Starting screenshots");
     const pages = await browser.pages();
+    if (useErrorCheck) {
+        // Add console listeners that take note on error messages.
+        pages.forEach(addConsoleListener);
+    }
 
     var previousTime = Date.now();
     var timeNow = Date.now();
@@ -239,6 +275,10 @@ async function startBrowser() {
     }
 
     try {
+        dashboardUrls.forEach((dashboardUrl) => {
+            receivedErrorMessages[dashboardUrl] = 0;
+        });
+
         const nextRestartTime = getNextTime(restartTimes);
         console.log(new Date(), "Next browser restart is scheduled for", nextRestartTime);
         const browser = await getBrowser();

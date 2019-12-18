@@ -1,8 +1,15 @@
+# don't commit the actual settings used
 secrets.env
 settings.env
 dashboard_urls.txt
 dashboard_names.txt
 
+# don't commit the changed location configuration files
+nginx/location_index.conf
+nginx/location_png.conf
+nginx/location_html.conf
+
+# don't commit files used in testing
 index.html
 dashboard_?.png
 dashboard_?.html

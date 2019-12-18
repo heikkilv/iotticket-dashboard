@@ -15,7 +15,8 @@ Older version might work but have not been tested.
 
 - Rename `dashboard_names_template.txt` to `dashboard_names.txt` and edit in the names of the dashboards.
 - Rename `dashboard_urls_template` to `dashboard_urls.txt` and edit in the urls of the dashboards.
-- Rename `settings_template.env` to `settings.env` and modify the settings as needed.
+    - In order to hide the control panels from the screenshots, it is advisable to add the query parameter `tray=hide` to the url, i.e. `<url_to_dashboard>?tray=hide`.
+- Rename `settings_template.env` to `settings.env` and modify the settings as needed. Descriptions for the settings can be found inside the settings file.
 - Rename `secrets_template.env` to `secrets.env` and edit in the access credentials for the IoT-Ticket dashboards.
 - Run the start_service script.
 
