@@ -10,6 +10,7 @@ const puppeteer = require("puppeteer");
 
 const mSecsPerDay = 86400000;
 const errorMessageLimit = 10;
+var receivedErrorMessagesTotal = 0;
 
 const iotticketUsername = process.env.IOTTICKET_USERNAME;
 const iotticketPassword = process.env.IOTTICKET_PASSWORD;
@@ -32,10 +33,8 @@ const mouseY2 = mouseY1;
 
 const dashboardUrls = fs.readFileSync(dashboardListFile, "utf8").split("\n");
 var dashboardIndexes = {};
-var receivedErrorMessages = {};
 dashboardUrls.forEach((dashboardUrl, index) => {
     dashboardIndexes[dashboardUrl] = index + 1;
-    receivedErrorMessages[dashboardUrl] = 0;
 });
 
 function getScreenshotFilename(number) {
@@ -45,168 +44,194 @@ function getScreenshotFilename(number) {
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
 function getNextTime(clockTimes) {
-    const clockDatetimes = clockTimes.map(clockTime => {
-        const timeParts = clockTime.split(":");
-        const clockDatetime = new Date();
-        clockDatetime.setHours(timeParts[0]);
-        clockDatetime.setMinutes(timeParts[1]);
-        clockDatetime.setSeconds(timeParts[2]);
-        clockDatetime.setMilliseconds(0);
-        return clockDatetime;
-    });
-
-    for (const clockDatetime of clockDatetimes) {
-        if (clockDatetime > Date.now()) {
+    try {
+        const clockDatetimes = clockTimes.map(clockTime => {
+            const timeParts = clockTime.split(":");
+            const clockDatetime = new Date();
+            clockDatetime.setHours(timeParts[0]);
+            clockDatetime.setMinutes(timeParts[1]);
+            clockDatetime.setSeconds(timeParts[2]);
+            clockDatetime.setMilliseconds(0);
             return clockDatetime;
+        });
+
+        for (const clockDatetime of clockDatetimes) {
+            if (clockDatetime > Date.now()) {
+                return clockDatetime;
+            }
         }
+
+        // The next restart will be in the next day.
+        const nextClockDatetime = new Date();
+        nextClockDatetime.setTime(Math.min(...clockDatetimes) + mSecsPerDay);
+        return nextClockDatetime;
     }
 
-    // The next restart will be in the next day.
-    const nextClockDatetime = new Date();
-    nextClockDatetime.setTime(Math.min(...clockDatetimes) + mSecsPerDay);
-    return nextClockDatetime;
+    catch(error) {
+        console.log(new Date(), error, "in getNextTime");
+        return new Date();
+    }
 }
 
 async function getBrowser() {
-    const browser = await puppeteer.launch({
-        executablePath: "google-chrome-unstable",
-        args: [
-            "--no-sandbox",
-            "--disable-dev-shm-usage",
-            "--window-size=".concat(screenshotWidth.toString(), ",", screenshotHeight.toString())
-        ]
-    });
-    return browser;
+    try {
+        const browser = await puppeteer.launch({
+            executablePath: "google-chrome-unstable",
+            args: [
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--window-size=".concat(screenshotWidth.toString(), ",", screenshotHeight.toString())
+            ]
+        });
+        return browser;
+    }
+
+    catch(error) {
+        console.log(new Date(), error, "in getBrowser");
+        return null;
+    }
 }
 
 async function setupBrowserPage(browser, dashboardUrl, dummy = false) {
-    var usedDashboardUrl = dashboardUrl;
-    if (dummy) {
-        if (dashboardUrl.includes('?')) {
-            usedDashboardUrl += '&';
+    try {
+        var usedDashboardUrl = dashboardUrl;
+        if (dummy) {
+            if (dashboardUrl.includes('?')) {
+                usedDashboardUrl += '&';
+            }
+            else {
+                usedDashboardUrl += '?';
+            }
+            usedDashboardUrl += "dummypage=true";
         }
-        else {
-            usedDashboardUrl += '?';
+
+        const pages = await browser.pages();
+        const pageUrls = pages.map(page => page.url());
+        if (pageUrls.includes(usedDashboardUrl)) {
+            console.log(new Date(), "Page " + usedDashboardUrl + " already exists.");
+            return;
         }
-        usedDashboardUrl += "dummypage=true";
+
+        const page = await browser.newPage();
+        await page.setViewport({
+            width: screenshotWidth,
+            height: screenshotHeight,
+            deviceScaleFactor: 1
+        });
+
+        // handle the session login process
+        await page.goto(usedDashboardUrl, {waitUntil: "domcontentloaded"});
+        await delay(loginWait);
+        await page.keyboard.type(iotticketUsername);
+        await delay(loginWait);
+        await page.keyboard.press("Tab");
+        await page.keyboard.type(iotticketPassword);
+        await delay(loginWait);
+        await page.keyboard.press("Tab");
+        await page.keyboard.press("Enter");
+        await delay(loginWait);
+
+        // load the proper dashboard
+        const result = await page.goto(usedDashboardUrl, {waitUntil: "domcontentloaded"});
+        if (result !== null && typeof result.status === 'function' && result.status() !== 200) {
+            console.log(new Date(), "Closing page " + usedDashboardUrl + " because of status code " + result.status());
+            page.close();
+            return;
+        }
+
+        await delay(initialWait / 5);
+
+        // hide the tray on the dashboard
+        await page.mouse.move(mouseX1, mouseY1);
+        await delay(mouseWait);
+        await page.mouse.move(mouseX2, mouseY2, {steps: 10});
+        await delay(mouseWait);
+        await page.mouse.down();
+        await delay(mouseWait);
+        await page.mouse.up();
+        await delay(mouseWait);
+        await page.mouse.move(mouseX1, mouseY1, {steps: 10});
     }
 
-    const pages = await browser.pages();
-    const pageUrls = pages.map(page => page.url());
-    if (pageUrls.includes(usedDashboardUrl)) {
-        console.log(new Date(), "Page " + usedDashboardUrl + " already exists.");
-        return;
+    catch(error) {
+        console.log(new Date(), error, "in setupBrowserPage");
     }
-
-    const page = await browser.newPage();
-    await page.setViewport({
-        width: screenshotWidth,
-        height: screenshotHeight,
-        deviceScaleFactor: 1
-    });
-
-    // handle the session login process
-    await page.goto(usedDashboardUrl, {waitUntil: "domcontentloaded"});
-    await delay(loginWait);
-    await page.keyboard.type(iotticketUsername);
-    await delay(loginWait);
-    await page.keyboard.press("Tab");
-    await page.keyboard.type(iotticketPassword);
-    await delay(loginWait);
-    await page.keyboard.press("Tab");
-    await page.keyboard.press("Enter");
-    await delay(loginWait);
-
-    // load the proper dashboard
-    const result = await page.goto(usedDashboardUrl, {waitUntil: "domcontentloaded"});
-    if (result !== null && typeof result.status === 'function' && result.status() !== 200) {
-        console.log(new Date(), "Closing page " + usedDashboardUrl + " because of status code " + result.status());
-        page.close();
-        return;
-    }
-
-    await delay(initialWait / 5);
-
-    // hide the tray on the dashboard
-    await page.mouse.move(mouseX1, mouseY1);
-    await delay(mouseWait);
-    await page.mouse.move(mouseX2, mouseY2, {steps: 10});
-    await delay(mouseWait);
-    await page.mouse.down();
-    await delay(mouseWait);
-    await page.mouse.up();
-    await delay(mouseWait);
-    await page.mouse.move(mouseX1, mouseY1, {steps: 10});
 }
 
 function addConsoleListener(page) {
     // modified from https://stackoverflow.com/questions/58089425/
     // on how to print out the console messages with a hack that works in puppeteer 1.20.0
-    page.on('console', (msg) => {
-        const cleanMessage = msg.args()
-                                .map(arg => arg.toString()
-                                               .substr(9))
-                                .join(" ");
+    try {
+        page.on("console", (msg) => {
+            const cleanMessage = msg.args()
+                                    .map(arg => arg.toString()
+                                                .substr(9))
+                                    .join(" ");
 
-        if (useErrorCheck && cleanMessage.includes("error")) {
-            const pageUrl = page.url();
-            if (pageUrl in receivedErrorMessages) {
-                receivedErrorMessages[pageUrl] += 1;
+            if (cleanMessage.includes("error")) {
+                receivedErrorMessagesTotal += 1;
             }
-        }
-    });
+        });
+    }
+
+    catch(error) {
+        console.log(new Date(), error, "in addConsoleListener");
+    }
 }
 
 async function checkBrowserSetup(browser) {
-    // close unnecessary pages
-    var pages = await browser.pages();
-    var previousUrls = [];
-    var useDelay = false;
-    for (const page of pages) {
-        const pageUrl = await page.url();
-        if (!dashboardUrls.includes(pageUrl)) {
-            console.log(new Date(), "Removing page: " + pageUrl);
-            page.close();
-            useDelay = true;
+    try {
+        // close unnecessary pages
+        var pages = await browser.pages();
+        var previousUrls = [];
+        var useDelay = false;
+        for (const page of pages) {
+            const pageUrl = await page.url();
+            if (!dashboardUrls.includes(pageUrl)) {
+                console.log(new Date(), "Removing page: " + pageUrl);
+                page.close();
+                useDelay = true;
+            }
+            else if (previousUrls.includes(pageUrl)) {
+                console.log(new Date(), "Removing duplicate page: " + pageUrl);
+                page.close();
+                useDelay = true;
+            }
+            else {
+                previousUrls.push(pageUrl);
+            }
         }
-        else if (previousUrls.includes(pageUrl)) {
-            console.log(new Date(), "Removing duplicate page: " + pageUrl);
-            page.close();
-            useDelay = true;
+
+        // If pages were closed, wait a bit before loading the new page list.
+        if (useDelay) {
+            await delay(loginWait);
         }
-        else {
-            previousUrls.push(pageUrl);
+
+        // Check that all needed pages are available
+        // and that there has not been too many error messages in the page, if error checking is on.
+        pages = await browser.pages();
+        const pageUrls = pages.map(page => page.url());
+        if (pageUrls.length !== dashboardUrls.length) {
+            console.log(new Date(), "Wrong number of pages: " + pageUrls.length);
+            return false;
+        }
+
+        for (const dashboardUrl of dashboardUrls) {
+            if (!pageUrls.includes(dashboardUrl)) {
+                console.log(new Date(), "Missing: " + dashboardUrl);
+                return false;
+            }
+        }
+
+        if (useErrorCheck && receivedErrorMessagesTotal >= errorMessageLimit) {
+            console.log(new Date(), "Too many error messages: (" + receivedErrorMessagesTotal.toString() + ")");
+            return false;
         }
     }
 
-    // If pages were closed, wait a bit before loading the new page list.
-    if (useDelay) {
-        await delay(loginWait);
-    }
-
-    // Check that all needed pages are available
-    // and that there has not been too many error messages in the page, if error checking is on.
-    pages = await browser.pages();
-    const pageUrls = pages.map(page => page.url());
-    if (pageUrls.length !== dashboardUrls.length) {
-        console.log(new Date(), "Wrong number of pages: " + pageUrls.length);
+    catch(error) {
+        console.log(new Date(), error, "in checkBrowserSetup");
         return false;
-    }
-
-    for (const dashboardUrl of dashboardUrls) {
-        if (!pageUrls.includes(dashboardUrl)) {
-            console.log(new Date(), "Missing: " + dashboardUrl);
-            return false;
-        }
-
-        if (useErrorCheck && receivedErrorMessages[dashboardUrl] >= errorMessageLimit) {
-            console.log(
-                new Date(),
-                "Too many error messages: (" + receivedErrorMessages[dashboardUrl].toString() + ")",
-                dashboardUrl
-            );
-            return false;
-        }
     }
 
     return true;
@@ -224,8 +249,9 @@ async function takeScreenshot(page) {
         });
         check = true;
     }
+
     catch(error) {
-        console.log(new Date(), error);
+        console.log(new Date(), error, "in takeScreenshot");
     }
 
     return check;
@@ -233,35 +259,41 @@ async function takeScreenshot(page) {
 
 async function takeScreenshotsUntilRestart(browser, nextRestartTime) {
     console.log(new Date(), "Starting screenshots");
-    const pages = await browser.pages();
-    if (useErrorCheck) {
-        // Add console listeners that take note on error messages.
-        pages.forEach(addConsoleListener);
+    try {
+        const pages = await browser.pages();
+        if (useErrorCheck) {
+            // Add console listeners that take note on error messages.
+            pages.forEach(addConsoleListener);
+        }
+
+        var previousTime = Date.now();
+        var timeNow = Date.now();
+        while (timeNow < nextRestartTime) {
+            const waitTime = Math.max(screenshotInterval - (timeNow - previousTime), screenshotInterval / 10);
+            await delay(waitTime);
+
+            const setupOk = await checkBrowserSetup(browser);
+            previousTime = Date.now();
+
+            var screenshotCheck = true;
+            if (setupOk) {
+                const screenshotChecks = await Promise.all(pages.map(takeScreenshot));
+                if (screenshotChecks.includes(false)) {
+                    screenshotCheck = false;
+                }
+            }
+
+            if (!setupOk || !screenshotCheck) {
+                console.log(new Date(), "Restarting browser because the setup is not ok.");
+                return;
+            }
+
+            timeNow = Date.now();
+        }
     }
 
-    var previousTime = Date.now();
-    var timeNow = Date.now();
-    while (timeNow < nextRestartTime) {
-        const waitTime = Math.max(screenshotInterval - (timeNow - previousTime), screenshotInterval / 10);
-        await delay(waitTime);
-
-        const setupOk = await checkBrowserSetup(browser);
-        previousTime = Date.now();
-
-        var screenshotCheck = true;
-        if (setupOk) {
-            const screenshotChecks = await Promise.all(pages.map(takeScreenshot));
-            if (screenshotChecks.includes(false)) {
-                screenshotCheck = false;
-            }
-        }
-
-        if (!setupOk || !screenshotCheck) {
-            console.log(new Date(), "Restarting browser because the setup is not ok.");
-            return;
-        }
-
-        timeNow = Date.now();
+    catch(error) {
+        console.log(new Date(), error, "in takeScreenshotsUntilRestart");
     }
 
     console.log(new Date(), "Closing and restarting the browser for a scheduled restart.");
@@ -271,13 +303,17 @@ async function takeScreenshotsUntilRestart(browser, nextRestartTime) {
 async function startBrowser() {
     async function verboseSetupBrowserPage(browser, dashboardUrl) {
         console.log(new Date(), "Setting up:", dashboardIndexes[dashboardUrl], dashboardUrl);
-        await setupBrowserPage(browser, dashboardUrl);
+        try {
+            await setupBrowserPage(browser, dashboardUrl);
+        }
+
+        catch(error) {
+            console.log(new Date(), error, "in verboseSetupBrowserPage");
+        }
     }
 
     try {
-        dashboardUrls.forEach((dashboardUrl) => {
-            receivedErrorMessages[dashboardUrl] = 0;
-        });
+        receivedErrorMessagesTotal = 0;
 
         const nextRestartTime = getNextTime(restartTimes);
         console.log(new Date(), "Next browser restart is scheduled for", nextRestartTime);
@@ -298,8 +334,9 @@ async function startBrowser() {
         await takeScreenshotsUntilRestart(browser, nextRestartTime);
         await browser.close();
     }
+
     catch(error) {
-        console.log(new Date(), error);
+        console.log(new Date(), error, "in startBrowser");
         if (typeof browser !== "undefined" && typeof browser.close === 'function') {
             await browser.close();
         }
@@ -310,10 +347,17 @@ async function startBrowser() {
 
 async function startProcess() {
     while (true) {
-        console.log(new Date(), "Starting a new browser.");
-        await startBrowser();
-        console.log(new Date(), "Restarting the browser shortly.");
-        await delay(initialWait / 2);
+        try {
+            console.log(new Date(), "Starting a new browser.");
+            await startBrowser();
+            console.log(new Date(), "Restarting the browser shortly.");
+            await delay(initialWait / 2);
+        }
+
+        catch(error) {
+            console.log(new Date(), error, "in startProcess");
+            await delay(initialWait / 2);
+        }
     }
 }
 
