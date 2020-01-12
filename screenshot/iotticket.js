@@ -163,13 +163,19 @@ function addConsoleListener(page) {
     // on how to print out the console messages with a hack that works in puppeteer 1.20.0
     try {
         page.on("console", (msg) => {
-            const cleanMessage = msg.args()
-                                    .map(arg => arg.toString()
-                                                .substr(9))
-                                    .join(" ");
+            try {
+                const cleanMessage = msg.args()
+                                        .map(arg => arg.toString()
+                                                    .substr(9))
+                                        .join(" ");
 
-            if (cleanMessage.includes("error")) {
-                receivedErrorMessagesTotal += 1;
+                if (cleanMessage.includes("error")) {
+                    receivedErrorMessagesTotal += 1;
+                }
+            }
+
+            catch(error) {
+                console.log(new Date(), error, "in console listener");
             }
         });
     }
