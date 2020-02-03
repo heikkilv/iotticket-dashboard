@@ -31,6 +31,8 @@ const mouseX2 = 0.979 * screenshotWidth;
 const mouseY1 = 0.907 * screenshotHeight;
 const mouseY2 = mouseY1;
 
+const serviceErrorMessage = "service unavailable";
+
 const dashboardUrls = fs.readFileSync(dashboardListFile, "utf8").split("\n");
 var dashboardIndexes = {};
 dashboardUrls.forEach((dashboardUrl, index) => {
@@ -135,6 +137,12 @@ async function setupBrowserPage(browser, dashboardUrl, dummy = false) {
         const result = await page.goto(usedDashboardUrl, {waitUntil: "domcontentloaded"});
         if (result !== null && typeof result.status === 'function' && result.status() !== 200) {
             console.log(new Date(), "Closing page " + usedDashboardUrl + " because of status code " + result.status());
+            page.close();
+            return;
+        }
+        const pageContent = await page.content();
+        if (pageContent.toLowerCase().includes(serviceErrorMessage)) {
+            console.log(new Date(), "Closing page " + usedDashboardUrl + " because of text: " + serviceErrorMessage);
             page.close();
             return;
         }
