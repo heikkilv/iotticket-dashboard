@@ -8,9 +8,12 @@
 const fs = require("fs");
 const puppeteer = require("puppeteer");
 
+const maxBrowserSetupTries = 5;
 const mSecsPerDay = 86400000;
 const errorMessageLimit = 10;
+const minConsoleMessageInterval = 180;
 var receivedErrorMessagesTotal = 0;
+var latestConsoleMessage = Math.round((new Date()).getTime() / 1000);
 
 const iotticketUsername = process.env.IOTTICKET_USERNAME;
 const iotticketPassword = process.env.IOTTICKET_PASSWORD;
@@ -180,6 +183,7 @@ function addConsoleListener(page) {
                 if (cleanMessage.includes("error")) {
                     receivedErrorMessagesTotal += 1;
                 }
+                latestConsoleMessage = Math.round((new Date()).getTime() / 1000);
             }
 
             catch(error) {
@@ -237,9 +241,17 @@ async function checkBrowserSetup(browser) {
             }
         }
 
-        if (useErrorCheck && receivedErrorMessagesTotal >= errorMessageLimit) {
-            console.log(new Date(), "Too many error messages: (" + receivedErrorMessagesTotal.toString() + ")");
-            return false;
+        if (useErrorCheck) {
+            if (receivedErrorMessagesTotal >= errorMessageLimit) {
+                console.log(new Date(), "Too many error messages: (" + receivedErrorMessagesTotal.toString() + ")");
+                return false;
+            }
+
+            const messageInterval = Math.round((new Date()).getTime() / 1000) - latestConsoleMessage;
+            if (messageInterval >= minConsoleMessageInterval) {
+                console.log(new Date(), "No console messages: (" + messageInterval.toString() + " seconds)");
+                return false;
+            }
         }
     }
 
@@ -280,6 +292,7 @@ async function takeScreenshotsUntilRestart(browser, nextRestartTime) {
             pages.forEach(addConsoleListener);
         }
 
+        latestConsoleMessage = Math.round((new Date()).getTime() / 1000);
         var previousTime = Date.now();
         var timeNow = Date.now();
         while (timeNow < nextRestartTime) {
@@ -337,12 +350,20 @@ async function startBrowser() {
         // Load first a extra dummy dashboard page because the first opened page seems to display differently.
         await setupBrowserPage(browser, dashboardUrls[0], true);
 
+        var counter = 0;
         while (!setupFinished) {
+            counter++;
             for (const dashboardUrl of dashboardUrls) {
                 await verboseSetupBrowserPage(browser, dashboardUrl);
             }
             await delay(4 * initialWait / 5);
             setupFinished = await checkBrowserSetup(browser);
+
+            if (counter >= maxBrowserSetupTries) {
+                console.log(new Date(), counter, "browser setup tries used => closing browser");
+                await browser.close();
+                return;
+            }
         }
 
         await takeScreenshotsUntilRestart(browser, nextRestartTime);
