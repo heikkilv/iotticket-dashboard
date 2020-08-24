@@ -10,8 +10,8 @@ const puppeteer = require("puppeteer");
 
 const maxBrowserSetupTries = 5;
 const mSecsPerDay = 86400000;
-const errorMessageLimit = 10;
-const minConsoleMessageInterval = 180;
+const errorMessageLimit = 100;
+const minConsoleMessageInterval = 300;
 var receivedErrorMessagesTotal = 0;
 var latestConsoleMessage = Math.round((new Date()).getTime() / 1000);
 
@@ -341,6 +341,7 @@ async function startBrowser() {
 
     try {
         receivedErrorMessagesTotal = 0;
+        latestConsoleMessage = Math.round((new Date()).getTime() / 1000);
 
         const nextRestartTime = getNextTime(restartTimes);
         console.log(new Date(), "Next browser restart is scheduled for", nextRestartTime);
