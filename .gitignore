@@ -13,3 +13,6 @@ nginx/location_html.conf
 index.html
 dashboard_?.png
 dashboard_?.html
+
+# don't commit VS Code user specific config files
+.vscode
