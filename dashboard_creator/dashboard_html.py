@@ -1,4 +1,4 @@
-"""Module for creating static html pages for viewing screenshots from IoT-Ticket dashboards."""
+"""Module for creating static HTML pages for viewing screenshots from IoT-Ticket dashboards."""
 
 # Copyright (c) Tampere University 2020.
 # This software has been developed in ProCemPlus-project funded by Business Finland.
@@ -62,7 +62,8 @@ def write_file(filename: str, file_text: str):
         print(error)
 
 
-if __name__ == "__main__":
+def create_html_files():
+    """Creates the static HTML files for viewing screenshots from IoT-Ticket dashboards."""
     dashboard_name_file = os.environ.get("dashboard_name_file", "")
     common_title = os.environ.get("common_title", "Dashboards")
     url_path = os.environ.get("url_path", "")
@@ -96,3 +97,7 @@ if __name__ == "__main__":
         dashboard_list="\n".join(dashboard_item_list)
     )
     write_file(INDEX_FILENAME, index_html)
+
+
+if __name__ == "__main__":
+    create_html_files()
