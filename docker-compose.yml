@@ -19,6 +19,7 @@ services:
             - secrets.env
         environment:
             - dashboard_list=/run/secrets/dashboard_urls
+            - SCREENSHOT_START_INDEX=0
         secrets:
             - dashboard_urls
         restart: always

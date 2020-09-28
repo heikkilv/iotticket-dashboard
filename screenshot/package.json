@@ -14,7 +14,7 @@
         "port": "8080"
     },
     "dependencies": {
-        "puppeteer": "1.20.0"
+        "puppeteer": "5.3.1"
     },
     "devDependencies": {
         "minimist": ">=0.2.1"
