@@ -8,6 +8,8 @@
 const fs = require("fs");
 const puppeteer = require("puppeteer");
 
+const screenshot_start_index = parseInt(process.env.SCREENSHOT_START_INDEX);
+
 const maxBrowserSetupTries = 5;
 const mSecsPerDay = 86400000;
 const errorMessageLimit = 100;
@@ -43,7 +45,7 @@ dashboardUrls.forEach((dashboardUrl, index) => {
 });
 
 function getScreenshotFilename(number) {
-    return "screenshots/dashboard_" + number.toString() + ".png";
+    return "screenshots/dashboard_" + (number + screenshot_start_index).toString() + ".png";
 }
 
 const delay = ms => new Promise(res => setTimeout(res, ms));
@@ -81,7 +83,7 @@ function getNextTime(clockTimes) {
 async function getBrowser() {
     try {
         const browser = await puppeteer.launch({
-            executablePath: "google-chrome-unstable",
+            executablePath: "google-chrome-stable",
             args: [
                 "--no-sandbox",
                 "--disable-dev-shm-usage",
@@ -151,6 +153,7 @@ async function setupBrowserPage(browser, dashboardUrl, dummy = false) {
         }
 
         await delay(initialWait / 5);
+        console.log(await page.url());
 
         // hide the tray on the dashboard
         await page.mouse.move(mouseX1, mouseY1);
@@ -162,6 +165,11 @@ async function setupBrowserPage(browser, dashboardUrl, dummy = false) {
         await page.mouse.up();
         await delay(mouseWait);
         await page.mouse.move(mouseX1, mouseY1, {steps: 10});
+        await delay(mouseWait);
+        await page.mouse.down();
+        await delay(mouseWait);
+        await page.mouse.move(mouseX1/2, mouseY1/2, {steps: 40});
+        await delay(mouseWait);
     }
 
     catch(error) {
@@ -340,6 +348,7 @@ async function startBrowser() {
     }
 
     try {
+        console.log("screenshot_start_index", screenshot_start_index);
         receivedErrorMessagesTotal = 0;
         latestConsoleMessage = Math.round((new Date()).getTime() / 1000);
 

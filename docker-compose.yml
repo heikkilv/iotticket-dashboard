@@ -12,18 +12,16 @@ services:
     iotticket:
         image: iotticket:1.0
         container_name: iotticket-screenshot
-        expose:
-            - 8080
         env_file:
             - settings.env
             - secrets.env
         environment:
             - dashboard_list=/run/secrets/dashboard_urls
+            - SCREENSHOT_START_INDEX=0
         secrets:
             - dashboard_urls
         restart: always
         volumes:
-            - iotticket_data:/data
             - iotticket_screenshots:/data/screenshots
 
     dashboard_creator:
@@ -53,9 +51,6 @@ services:
             - dashboard_html:/data/html
 
 volumes:
-    iotticket_data:
-        external: true
-        name: iotticket_data
     iotticket_screenshots:
         external: true
         name: iotticket_screenshots
