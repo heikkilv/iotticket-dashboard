@@ -23,6 +23,7 @@ services:
         restart: always
         volumes:
             - iotticket_screenshots:/data/screenshots
+            - ./screenshot_templates:/data/screenshots/templates:ro
 
     dashboard_creator:
         image: dashboard_creator:1.0

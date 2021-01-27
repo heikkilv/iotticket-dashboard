@@ -12,10 +12,14 @@ const screenshot_start_index = parseInt(process.env.SCREENSHOT_START_INDEX);
 
 const maxBrowserSetupTries = 5;
 const mSecsPerDay = 86400000;
-const errorMessageLimit = 100;
+const errorMessageLimit = 200;
 const minConsoleMessageInterval = 300;
+const delayUntilUseTemplate = 300;
+
 var receivedErrorMessagesTotal = 0;
 var latestConsoleMessage = Math.round((new Date()).getTime() / 1000);
+var latestScreenshot = Math.round((new Date()).getTime() / 1000);
+var templateScreenshotInUse = false;
 
 const iotticketUseLogin = (process.env.use_iotticket_login === "false") ? false : true;
 const iotticketUsername = process.env.IOTTICKET_USERNAME;
@@ -28,6 +32,8 @@ const loginWait = parseInt(process.env.login_wait);
 const initialWait = parseInt(process.env.initial_wait);
 const mouseWait = 500;
 const useErrorCheck = (process.env.use_error_check === "true") ? true : false;
+const useRequestCheck = (process.env.use_request_check === "true") ? true : false;
+const useTemplateScreenshots = (process.env.use_template_screenshots === "true") ? true : false;
 var restartTimes = process.env.restart_times.split(",");
 restartTimes.sort();
 
@@ -47,6 +53,46 @@ dashboardUrls.forEach((dashboardUrl, index) => {
 
 function getScreenshotFilename(number) {
     return "screenshots/dashboard_" + (number + screenshot_start_index).toString() + ".png";
+}
+
+function getScreenshotTemplateFilename(number) {
+    return "screenshots/templates/dashboard_" + (number + screenshot_start_index).toString() + ".png";
+}
+
+function copyScreenshotTemplates() {
+    Object.keys(dashboardIndexes).forEach(function(index) {
+        const targetFile = getScreenshotFilename(dashboardIndexes[index]);
+        const templateFile = getScreenshotTemplateFilename(dashboardIndexes[index]);
+
+        fs.access(templateFile, fs.F_OK, (access_error) => {
+            if (access_error) {
+                console.log("Access error:", access_error);
+                return;
+            }
+
+            fs.copyFile(templateFile, targetFile, (copy_error) => {
+                if (copy_error) {
+                    console.log("Copy error:", copy_error);
+                    return;
+                }
+
+                console.log("Copied", templateFile, "to", targetFile);
+                templateScreenshotInUse = true;
+            });
+        });
+    });
+}
+
+function checkScreenshotUpdates() {
+    if (!useTemplateScreenshots || templateScreenshotInUse) {
+        return;
+    }
+
+    const screenshotInterval = Math.round((new Date()).getTime() / 1000) - latestScreenshot;
+    if (screenshotInterval >= delayUntilUseTemplate) {
+        console.log(new Date(), "No screenshots: (" + screenshotInterval.toString() + " seconds)");
+        copyScreenshotTemplates();
+    }
 }
 
 const delay = ms => new Promise(res => setTimeout(res, ms));
@@ -186,6 +232,35 @@ async function setupBrowserPage(browser, dashboardUrl, dummy = false) {
     }
 }
 
+function addRequestListener(page) {
+    try {
+        page.on("requestfailed", (req) => {
+            try {
+                // consider a failed request as an error message in the console
+                receivedErrorMessagesTotal += 1;
+                latestConsoleMessage = Math.round((new Date()).getTime() / 1000);
+            }
+            catch(error) {
+                console.log(new Date(), error, "in request failed listener");
+            }
+        });
+
+        page.on('requestfinished', (req) => {
+            try {
+                // consider a finished request as a non-error console message
+                latestConsoleMessage = Math.round((new Date()).getTime() / 1000);
+            }
+            catch(error) {
+                console.log(new Date(), error, "in request finished listener");
+            }
+        });
+    }
+
+    catch(error) {
+        console.log(new Date(), error, "in addRequestListener");
+    }
+}
+
 function addConsoleListener(page) {
     // modified from https://stackoverflow.com/questions/58089425/
     // on how to print out the console messages with a hack that works in puppeteer 1.20.0
@@ -267,6 +342,7 @@ async function checkBrowserSetup(browser) {
             const messageInterval = Math.round((new Date()).getTime() / 1000) - latestConsoleMessage;
             if (messageInterval >= minConsoleMessageInterval) {
                 console.log(new Date(), "No console messages: (" + messageInterval.toString() + " seconds)");
+                latestConsoleMessage = Math.round((new Date()).getTime() / 1000);
                 return false;
             }
         }
@@ -291,6 +367,8 @@ async function takeScreenshot(page) {
             path: getScreenshotFilename(pageIndex)
         });
         check = true;
+        latestScreenshot = Math.round((new Date()).getTime() / 1000);
+        templateScreenshotInUse = false;
     }
 
     catch(error) {
@@ -305,6 +383,11 @@ async function takeScreenshotsUntilRestart(browser, nextRestartTime) {
     try {
         const pages = await browser.pages();
         if (useErrorCheck) {
+            if (useRequestCheck) {
+                // Add request listener, failed request are considered the same as error messages in console,
+                // and finished requests as non-error console messages
+                pages.forEach(addRequestListener);
+            }
             // Add console listeners that take note on error messages.
             pages.forEach(addConsoleListener);
         }
@@ -400,6 +483,11 @@ async function startBrowser() {
 }
 
 async function startProcess() {
+    if (useTemplateScreenshots) {
+        // setInterval takes the time parameter in milliseconds while delayUntilUseTemplate is given in seconds
+        setInterval(checkScreenshotUpdates, delayUntilUseTemplate * 100);
+    }
+
     while (true) {
         try {
             console.log(new Date(), "Starting a new browser.");
