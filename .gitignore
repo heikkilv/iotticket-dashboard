@@ -16,3 +16,6 @@ dashboard_?.html
 
 # don't commit local Node.js packages
 node_modules
+
+# don't commit VS Code user specific config files
+.vscode
