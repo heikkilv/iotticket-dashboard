@@ -17,6 +17,7 @@ const minConsoleMessageInterval = 300;
 var receivedErrorMessagesTotal = 0;
 var latestConsoleMessage = Math.round((new Date()).getTime() / 1000);
 
+const iotticketUseLogin = (process.env.use_iotticket_login === "false") ? false : true;
 const iotticketUsername = process.env.IOTTICKET_USERNAME;
 const iotticketPassword = process.env.IOTTICKET_PASSWORD;
 const dashboardListFile = process.env.dashboard_list;
@@ -125,6 +126,14 @@ async function setupBrowserPage(browser, dashboardUrl, dummy = false) {
             height: screenshotHeight,
             deviceScaleFactor: 1
         });
+
+        // for pages that do not require the login process simply load the page
+        if (!iotticketUseLogin) {
+            await page.goto(usedDashboardUrl, {waitUntil: "domcontentloaded"});
+            await delay(initialWait / 5);
+            console.log(await page.url());
+            return;
+        }
 
         // handle the session login process
         await page.goto(usedDashboardUrl, {waitUntil: "domcontentloaded"});
