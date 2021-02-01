@@ -55,4 +55,8 @@ WORKDIR /data
 RUN mkdir screenshots
 COPY . .
 RUN npm install
+
+# Set the timezone for the server to the Finnish local time
+ENV TZ Europe/Helsinki
+
 CMD ["npm", "start"]
