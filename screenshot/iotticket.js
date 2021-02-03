@@ -12,9 +12,15 @@ const screenshot_start_index = parseInt(process.env.SCREENSHOT_START_INDEX);
 
 const maxBrowserSetupTries = 5;
 const mSecsPerDay = 86400000;
-const errorMessageLimit = 200;
-const minConsoleMessageInterval = 300;
-const delayUntilUseTemplate = 300;
+const errorMessageLimit = ("error_message_limit" in process.env)
+                          ? parseInt(process.env.error_message_limit)
+                          : 200;
+const minConsoleMessageInterval = ("min_console_message_interval" in process.env)
+                                  ? parseInt(process.env.min_console_message_interval)
+                                  : 300;
+const delayUntilUseTemplate = ("delay_until_use_template" in process.env)
+                                  ? parseInt(process.env.delay_until_use_template)
+                                  : 300;
 
 var receivedErrorMessagesTotal = 0;
 var latestConsoleMessage = Math.round((new Date()).getTime() / 1000);
