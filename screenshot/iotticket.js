@@ -24,6 +24,7 @@ const delayUntilUseTemplate = ("delay_until_use_template" in process.env)
 
 var receivedErrorMessagesTotal = 0;
 var latestConsoleMessage = Math.round((new Date()).getTime() / 1000);
+var firstConsoleMessageReceived = false;
 var latestScreenshot = Math.round((new Date()).getTime() / 1000);
 var templateScreenshotInUse = false;
 
@@ -245,6 +246,7 @@ function addRequestListener(page) {
                 // consider a failed request as an error message in the console
                 receivedErrorMessagesTotal += 1;
                 latestConsoleMessage = Math.round((new Date()).getTime() / 1000);
+                firstConsoleMessageReceived = true;
             }
             catch(error) {
                 console.log(new Date(), error, "in request failed listener");
@@ -255,6 +257,7 @@ function addRequestListener(page) {
             try {
                 // consider a finished request as a non-error console message
                 latestConsoleMessage = Math.round((new Date()).getTime() / 1000);
+                firstConsoleMessageReceived = true;
             }
             catch(error) {
                 console.log(new Date(), error, "in request finished listener");
@@ -282,6 +285,7 @@ function addConsoleListener(page) {
                     receivedErrorMessagesTotal += 1;
                 }
                 latestConsoleMessage = Math.round((new Date()).getTime() / 1000);
+                firstConsoleMessageReceived = true;
             }
 
             catch(error) {
@@ -349,6 +353,7 @@ async function checkBrowserSetup(browser) {
             if (messageInterval >= minConsoleMessageInterval) {
                 console.log(new Date(), "No console messages: (" + messageInterval.toString() + " seconds)");
                 latestConsoleMessage = Math.round((new Date()).getTime() / 1000);
+                firstConsoleMessageReceived = false;
                 return false;
             }
         }
@@ -369,6 +374,12 @@ async function takeScreenshot(page) {
         const pageUrl = await page.url();
         const pageIndex = dashboardIndexes[pageUrl];
         // console.log(new Date(), pageUrl, getScreenshotFilename(pageIndex));
+        if (useTemplateScreenshots && templateScreenshotInUse && !firstConsoleMessageReceived) {
+            // no console message received yet and the template screenshot is in use
+            // => do not take a new screenshot until the first console message has arrived
+            //    however, return true to not to force a browser restart
+            return true;
+        }
         await page.screenshot({
             path: getScreenshotFilename(pageIndex)
         });
@@ -399,6 +410,8 @@ async function takeScreenshotsUntilRestart(browser, nextRestartTime) {
         }
 
         latestConsoleMessage = Math.round((new Date()).getTime() / 1000);
+        firstConsoleMessageReceived = false;
+
         var previousTime = Date.now();
         var timeNow = Date.now();
         while (timeNow < nextRestartTime) {
@@ -449,6 +462,7 @@ async function startBrowser() {
         console.log("screenshot_start_index", screenshot_start_index);
         receivedErrorMessagesTotal = 0;
         latestConsoleMessage = Math.round((new Date()).getTime() / 1000);
+        firstConsoleMessageReceived = false;
 
         const nextRestartTime = getNextTime(restartTimes);
         console.log(new Date(), "Next browser restart is scheduled for", nextRestartTime);
@@ -490,6 +504,9 @@ async function startBrowser() {
 
 async function startProcess() {
     if (useTemplateScreenshots) {
+        // use the template screenshots by default until actual screenshots can be taken
+        copyScreenshotTemplates();
+
         // setInterval takes the time parameter in milliseconds while delayUntilUseTemplate is given in seconds
         setInterval(checkScreenshotUpdates, delayUntilUseTemplate * 100);
     }
